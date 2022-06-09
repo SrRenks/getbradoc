@@ -1,8 +1,10 @@
 from multiprocessing.pool import Pool
+from multiprocessing import freeze_support
 from bs4 import BeautifulSoup
 import requests
 import os.path
 import json
+import os
 
 
 # get parcial cnpj value from CTE/NFE
@@ -29,9 +31,10 @@ def get_cnpj(code, consult_type):
     try:
         payload = data | {
             'ctl00$ContentPlaceHolder1$txtChaveAcessoResumo': code}
-        req = requests.Session().post(f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, timeout=2)
+        req = requests.Session().post(
+            f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, timeout=10)
     except requests.exceptions.Timeout as e:
-        raise 
+        raise SystemExit(e)
     try:
         # try capture parcial cnpj from html document
         if consult_type == 'cte':
@@ -50,6 +53,6 @@ def get_cnpj(code, consult_type):
 
 
 # run multiple processes same time with different parameters
-def multi_task(code_list):
-    with Pool() as p:
+def multi_task(data_list):
+    with Pool()as p:
         return p.starmap(get_cnpj, code_list)
