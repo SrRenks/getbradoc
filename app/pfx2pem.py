@@ -4,7 +4,7 @@ from pathlib import Path
 import os.path
 
 
-# convert .pfx to .pem and get path to correct certificates
+# convert .pfx to .pem and get path to correct certificates and return path + expiration date
 def pfx2pem(pfx_path, pfx_password):
     if type(pfx_password) != str:
         raise TypeError("'pfx_password' must be a str")
@@ -26,9 +26,14 @@ def pfx2pem(pfx_path, pfx_password):
                     pem_file.write(main_cert.public_bytes(Encoding.PEM))
                     for ca in add_certs:
                         pem_file.write(ca.public_bytes(Encoding.PEM))
-                return pem_file.name
+                return pem_file.name, main_cert.not_valid_after
         except ValueError as e:
             raise ValueError(f"invalid password for '{pfx_path}'")
 
     else:
-        return pfx_path.replace('.pfx', '.pem')
+        try:
+            pfx = Path(pfx_path).read_bytes()
+            private_key, main_cert, add_certs = load_key_and_certificates(pfx, pfx_password.encode('utf-8'), None)
+            return pfx_path.replace('.pfx', '.pem'), main_cert.not_valid_after
+        except ValueError as e:
+            raise ValueError(f"invalid password for '{pfx_path}'")
