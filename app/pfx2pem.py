@@ -6,7 +6,13 @@ import os.path
 
 # convert .pfx to .pem and get path to correct certificates
 def pfx2pem(pfx_path, pfx_password):
+    if type(pfx_password) != str:
+        raise TypeError("'pfx_password' must be a str")
+    if type(pfx_path) != str:
+        raise TypeError("'pfx_path' must be a str")
     # verify if certificate.pfx exists
+    if not os.path.isfile(pfx_path):
+        raise FileNotFoundError(f"'{pfx_path}' does not exist")
     if not os.path.exists(pfx_path.replace('.pfx', '.pem')):
         try:
             pfx = Path(pfx_path).read_bytes()
@@ -27,3 +33,5 @@ def pfx2pem(pfx_path, pfx_password):
 
     else:
         return pfx_path.replace('.pfx', '.pem')
+
+print(pfx2pem('certificates/A1 - Contrutora Tenda - Matriz.pfx', '123456'))
