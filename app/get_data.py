@@ -31,10 +31,12 @@ def get_cnpj(code, consult_type):
     try:
         payload = data | {
             'ctl00$ContentPlaceHolder1$txtChaveAcessoResumo': code}
+        cookies = {
+            "AspxAutoDetectCookieSupport": "1"} if consult_type == 'nfe' else None
         req = requests.Session().post(
-            f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, timeout=10)
-    except requests.exceptions.Timeout as e:
-        raise SystemExit(e)
+            f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, cookies=cookies)
+    except requests.exceptions.RequestException as e:  # This is the correct syntax
+        raise SystemExit(f'ERROR in {code}: {e}')
     try:
         # try capture parcial cnpj from html document
         if consult_type == 'cte':
@@ -44,9 +46,8 @@ def get_cnpj(code, consult_type):
             return [code, result[7:10]]
         elif consult_type == 'nfe':
             soup = BeautifulSoup(req.content, "html.parser")
-            result = soup.find(
-                "table", {"class": "box"})
-            return [code, result, result[7:10]]
+            result = soup.find('td', {'class': 'col-5'}).find('span').getText()
+            return [code, result[7:10]]
     except Exception as es:
         if str(es) == "'NoneType' object has no attribute 'find'":
             return f"Error in {code} CNPJ não encontrado"
