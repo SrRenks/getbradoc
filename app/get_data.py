@@ -72,7 +72,7 @@ def get_cnpj(code, consult_type):
         #try download XML File
         with requests.Session().post(f"https://www.{consult_type}.fazenda.gov.br/portal/downloadNFe.aspx", cookies=session_cookie, stream=True, cert=pem) as r:
             r.raise_for_status()
-            with open('test.xml', 'wb') as f:
+            with open(f'tmp/{code}.xml', 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192): 
                     f.write(chunk)
     except requests.exceptions.RequestException as e:  # This is the correct syntax
