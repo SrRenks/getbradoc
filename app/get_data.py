@@ -1,8 +1,8 @@
 from multiprocessing import freeze_support
 from datetime import datetime, timedelta
+from app.pfx2pem import pfx2pem
 from shutil import copyfileobj
 from bs4 import BeautifulSoup
-from pfx2pem import pfx2pem
 import requests
 import os.path
 import json
@@ -74,7 +74,7 @@ def get_data(code, consult_type):
         # try download
         with session.post(req.url, stream=True, data=payload) as r:
             with session.get(r.url, cert=pem, stream=True) as file:
-                with open(f"tmp/{code}.xml", 'wb') as outfile:
+                with open(f"tmp/{consult_type}{code}.xml", 'wb') as outfile:
                     copyfileobj(file.raw, outfile)
     except requests.exceptions.RequestException as e:
         raise SystemExit(f'ERROR in {code}: {e}')
