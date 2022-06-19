@@ -1,7 +1,8 @@
-from multiprocessing.pool import Pool
 from multiprocessing import freeze_support
-from pfx2pem import pfx2pem
+from datetime import datetime, timedelta
+from shutil import copyfileobj
 from bs4 import BeautifulSoup
+from pfx2pem import pfx2pem
 import requests
 import os.path
 import json
@@ -9,7 +10,7 @@ import os
 
 
 # get parcial cnpj value from CTE/NFE
-def get_cnpj(code, consult_type):
+def get_data(code, consult_type):
     if type(code) not in [str, int]:
         raise TypeError('code must be a string or int')
     if type(consult_type) != str:
@@ -19,31 +20,25 @@ def get_cnpj(code, consult_type):
 
     # find payload json file and set cookies
     if os.path.isfile(f'app/{consult_type}_payload.json'):
-        try:
-            with open(f'app/{consult_type}_payload.json') as json_file:
-                data = json.load(json_file)
-            payload = data | {
-                'ctl00$ContentPlaceHolder1$txtChaveAcessoResumo': code}
-            cookies = {
-                "AspxAutoDetectCookieSupport": "1"} if consult_type == 'nfe' else None
-        except Exception as e:
-            raise OSError(
-                f"cannot open '{consult_type}_payload.json' because: {e}")
+        with open(f'app/{consult_type}_payload.json') as json_file:
+            data = json.load(json_file)
+        payload = data | {'ctl00$ContentPlaceHolder1$txtChaveAcessoResumo': code}
+        cookies = {"AspxAutoDetectCookieSupport": "1"} if consult_type == 'nfe' else None
     else:
         raise OSError(f"'{consult_type}_payload.json' not found file")
+
     # requests from CTE/NFE HTML document and save session cookie
     try:
-        req = requests.Session().post(
-            f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, cookies=cookies)
-        session_cookie = dict(req.history[0].cookies)
-    except requests.exceptions.RequestException as e:  # This is the correct syntax
+        session = requests.Session()
+        req = session.post(f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, cookies=cookies)
+    except requests.exceptions.RequestException as e:
         raise SystemExit(f'ERROR in {code}: {e}')
+
     # try capture parcial CNPJ from html document
     try:
         if consult_type == 'cte':
             soup = BeautifulSoup(req.content, "html.parser")
-            result = soup.find(
-                "div", {"class": "wID25 pID_R10"}).find('p').getText()
+            result = soup.find("div", {"class": "wID25 pID_R10"}).find('p').getText()
             parcial_cnpj = result[7:10]
         elif consult_type == 'nfe':
             soup = BeautifulSoup(req.content, "html.parser")
@@ -51,34 +46,35 @@ def get_cnpj(code, consult_type):
             parcial_cnpj = result[7:10]
     except Exception as es:
         if str(es) == "'NoneType' object has no attribute 'find'":
-            with open('test.html', 'w') as r:
+            with open(f'error_{code}.html', 'w') as r:
                 r.write(req.text)
             raise SystemExit(
                 f"ERROR in {code}: data not found, check file '{consult_type}_payload.json' and request HTML page.")
         else:
             raise SystemExit(f'ERROR in {code}: {es}')
-    # request to CTE/NFE to get full data of the cod
-    try:
-        #payload for download link
-        payload = {
-        "tipoConsulta": "resumo",
-        "a": "IXO2fKs9zGK04lBhkURUHKerH8FB6LiqpXPKhRXt7L9nRvPre5vAFtOSkmHpUrhV",
-        "tipoConteudo": "7PhJ gAVw2g=",
-        "lp": "SVhPMmZLczl6R0swNGxCaGtVUlVIS2VySDhGQjZMaXFwWFBLaFJYdDdMOW5SdlByZTV2QUZyZDd4L1BtS1JvRXRsamJjeTdIQWJMSklrTTJISHFxdGQxSExoOTFEQVM1aVRjN2w1OW1DU0k90"}
-        #get .pem certificates
+
+    # search for the certificate for the partial CNPJ in custom certificates.json, if not found, select the default.
+    if os.path.isfile('certificates/custom_certificates.json'):
         with open('certificates/custom_certificates.json') as custom_list:
-            pfx_path = custom_list[parcial_cnpj] if parcial_cnpj in custom_list else "certificates/A1 - Contrutora Tenda - Matriz.pfx"
-            pem, expiration = pfx2pem(pfx_path, "123456")
-        #try download XML File
-        with requests.Session().post(f"https://www.{consult_type}.fazenda.gov.br/portal/downloadNFe.aspx", cookies=session_cookie, stream=True, cert=pem) as r:
-            r.raise_for_status()
-            with open(f'tmp/{code}.xml', 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192): 
-                    f.write(chunk)
-    except requests.exceptions.RequestException as e:  # This is the correct syntax
+            pfx_data = custom_list[parcial_cnpj] if parcial_cnpj in custom_list else ["certificates/A1 - Contrutora Tenda - Matriz.pfx", "123456"]
+            pem, expiration = pfx2pem(pfx_data[0], pfx_data[1])
+            remaining_days = (expiration - datetime.now()).days
+            expiration_date = expiration.strftime('%d/%m/%Y')
+    else:
+        raise OSError(f"'custom_certificates.json' not found file")
+
+    # try download XML File
+    try:
+        # try open download_payload.json to get payload data for request
+        if os.path.isfile('certificates/custom_certificates.json'):
+            with open(f'app/download_payload.json') as json_file:
+                payload = json.load(json_file)
+        else:
+            raise OSError(f"'custom_certificates.json' not found file")
+        # try download
+        with session.post(req.url, stream=True, data=payload) as r:
+            with session.get(r.url, cert=pem, stream=True) as file:
+                with open(f"tmp/{code}.xml", 'wb') as outfile:
+                    copyfileobj(file.raw, outfile)
+    except requests.exceptions.RequestException as e:
         raise SystemExit(f'ERROR in {code}: {e}')
-        
-# run multiple processes same time with different parameters
-def multi_task(data_list):
-    with Pool()as p:
-        return p.starmap(get_cnpj, data_list)
