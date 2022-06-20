@@ -1,7 +1,8 @@
+from app.send_email import expiration_coming
 from multiprocessing import freeze_support
 from datetime import datetime, timedelta
 from app.pfx2pem import pfx2pem
-from shutil import copyfileobj, move
+from shutil import copyfileobj
 from bs4 import BeautifulSoup
 import requests
 import os.path
@@ -60,6 +61,8 @@ def get_data(code, consult_type):
             pem, expiration = pfx2pem(pfx_data[0], pfx_data[1])
             remaining_days = (expiration - datetime.now()).days
             expiration_date = expiration.strftime('%d/%m/%Y')
+            if remaining_days <= 5:
+                expiration_coming(pem, remaining_days, expiration_date)
     else:
         raise OSError(f"'custom_certificates.json' not found file")
 
@@ -78,13 +81,16 @@ def get_data(code, consult_type):
                     copyfileobj(file.raw, outfile)
                     outfile.close()
         # checks if the xml file has more than one line, as it is an error signal
-        with open(f'tmp/{consult_type}{code}.xml', 'rb') as abc:
-            lines = [i for i in abc.readlines() if len(i)>1]
+        with open(f'tmp/{consult_type}{code}.xml', 'rb') as xml_file:
+            lines = [i for i in xml_file.readlines() if len(i)>1]
             if len(lines) > 1 or len(lines) == 0:
-                abc.close()
-                os.rename(f'tmp/{consult_type}{code}.xml', os.path.join('logs/', f'error_{consult_type}{code}.xml'))
+                xml_file.close()
+                if not os.path.exists(f'logs/error_{consult_type}{code}.xml'):
+                    os.rename(f'tmp/{consult_type}{code}.xml', os.path.join('logs/', f'error_{consult_type}{code}.xml'))
+                else:
+                    os.unlink(f'tmp/{consult_type}{code}.xml')
                 print(F"'tmp/{consult_type}{code}.xml' contains unexpected error, moved to logs")
             else:
-                abc.close()
+                xml_file.close()
     except requests.exceptions.RequestException as e:
         raise SystemExit(f'ERROR in {code}: {e}')
