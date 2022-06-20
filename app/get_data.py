@@ -1,7 +1,7 @@
 from multiprocessing import freeze_support
 from datetime import datetime, timedelta
 from app.pfx2pem import pfx2pem
-from shutil import copyfileobj
+from shutil import copyfileobj, move
 from bs4 import BeautifulSoup
 import requests
 import os.path
@@ -48,7 +48,7 @@ def get_data(code, consult_type):
         if str(es) == "'NoneType' object has no attribute 'find'":
             with open(f'logs/error_{code}.html', 'w') as r:
                 r.write(req.text)
-            raise SystemExit(
+            raise AttributeError(
                 f"ERROR in {code}: data not found, check file '{consult_type}_payload.json' and request HTML page.")
         else:
             raise SystemExit(f'ERROR in {code}: {es}')
@@ -76,5 +76,15 @@ def get_data(code, consult_type):
             with session.get(r.url, cert=pem, stream=True) as file:
                 with open(f"tmp/{consult_type}{code}.xml", 'wb') as outfile:
                     copyfileobj(file.raw, outfile)
+                    outfile.close()
+        # checks if the xml file has more than one line, as it is an error signal
+        with open(f'tmp/{consult_type}{code}.xml', 'rb') as abc:
+            lines = [i for i in abc.readlines() if len(i)>1]
+            if len(lines) > 1 or len(lines) == 0:
+                abc.close()
+                os.rename(f'tmp/{consult_type}{code}.xml', os.path.join('logs/', f'error_{consult_type}{code}.xml'))
+                print(F"'tmp/{consult_type}{code}.xml' contains unexpected error, moved to logs")
+            else:
+                abc.close()
     except requests.exceptions.RequestException as e:
         raise SystemExit(f'ERROR in {code}: {e}')
