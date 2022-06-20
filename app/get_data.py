@@ -46,7 +46,7 @@ def get_data(code, consult_type):
             parcial_cnpj = result[7:10]
     except Exception as es:
         if str(es) == "'NoneType' object has no attribute 'find'":
-            with open(f'error_{code}.html', 'w') as r:
+            with open(f'logs/error_{code}.html', 'w') as r:
                 r.write(req.text)
             raise SystemExit(
                 f"ERROR in {code}: data not found, check file '{consult_type}_payload.json' and request HTML page.")
