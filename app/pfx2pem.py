@@ -27,8 +27,8 @@ def pfx2pem(pfx_path, pfx_password):
                     for ca in add_certs:
                         pem_file.write(ca.public_bytes(Encoding.PEM))
                 return pem_file.name, main_cert.not_valid_after
-        except ValueError as e:
-            raise ValueError(f"invalid password for '{pfx_path}'")
+        except Exception as e:
+            return f"error in '{pfx_path}': {e}"
 
     else:
         try:
@@ -37,4 +37,4 @@ def pfx2pem(pfx_path, pfx_password):
                 pfx, pfx_password.encode('utf-8'), None)
             return pfx_path.replace('.pfx', '.pem'), main_cert.not_valid_after
         except ValueError as e:
-            raise ValueError(f"invalid password for '{pfx_path}'")
+            return f"error in '{pfx_path}' {e}"
