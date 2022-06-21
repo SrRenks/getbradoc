@@ -33,7 +33,7 @@ def get_data(code, consult_type):
         session = requests.Session()
         req = session.post(f'https://www.{consult_type}.fazenda.gov.br/portal/consultaRecaptcha.aspx', data=payload, cookies=cookies)
     except requests.exceptions.RequestException as e:
-        raise SystemExit(f'ERROR in {code}: {e}')
+        return (f'ERROR in {code}: {e}')
 
     # try capture parcial CNPJ from html document
     try:
@@ -49,20 +49,23 @@ def get_data(code, consult_type):
         if str(es) == "'NoneType' object has no attribute 'find'":
             with open(f'logs/error_{code}.html', 'w') as r:
                 r.write(req.text)
-            raise AttributeError(
-                f"ERROR in {code}: data not found, check file '{consult_type}_payload.json' and request HTML page.")
+                return f"ERROR in {code}: data not found, check 'logs/error_{code}.html'"
         else:
-            raise SystemExit(f'ERROR in {code}: {es}')
+            return f'ERROR in {code}: {es}'
+
 
     # search for the certificate for the partial CNPJ in custom certificates.json, if not found, select the default.
     if os.path.isfile('certificates/custom_certificates.json'):
         with open('certificates/custom_certificates.json') as custom_list:
             pfx_data = custom_list[parcial_cnpj] if parcial_cnpj in custom_list else ["certificates/A1 - Contrutora Tenda - Matriz.pfx", "123456"]
-            pem, expiration = pfx2pem(pfx_data[0], pfx_data[1])
-            remaining_days = (expiration - datetime.now()).days
-            expiration_date = expiration.strftime('%d/%m/%Y')
-            if remaining_days <= 5:
-                expiration_coming(pem, remaining_days, expiration_date)
+            if 'certificates' not in pfx_data[0]:
+                return f'ERROR in {code}: {pfx_data}'
+            else:
+                pem, expiration = pfx2pem(pfx_data[0], pfx_data[1])
+                remaining_days = (expiration - datetime.now()).days
+                expiration_date = expiration.strftime('%d/%m/%Y')
+                if remaining_days <= 5:
+                    expiration_coming(pem, remaining_days, expiration_date)
     else:
         raise OSError(f"'custom_certificates.json' not found file")
 
@@ -89,8 +92,9 @@ def get_data(code, consult_type):
                     os.rename(f'tmp/{consult_type}{code}.xml', os.path.join('logs/', f'error_{consult_type}{code}.xml'))
                 else:
                     os.unlink(f'tmp/{consult_type}{code}.xml')
-                print(F"'tmp/{consult_type}{code}.xml' contains unexpected error, moved to logs")
+                return f"ERROR in {code}: 'tmp/{consult_type}{code}.xml' contains unexpected error, moved to logs."
             else:
+                return f'OK in {code}'
                 xml_file.close()
     except requests.exceptions.RequestException as e:
-        raise SystemExit(f'ERROR in {code}: {e}')
+        return f'ERROR in {code}: {e}'
