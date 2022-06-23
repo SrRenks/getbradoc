@@ -1,7 +1,4 @@
 {
     "login": "yourlogin",
-    "password": "yourpassword",
-    "domain": null,
-    "keepConnected": false,
-    "deviceId": null
-  }
+    "password": "yourpassword"
+}
